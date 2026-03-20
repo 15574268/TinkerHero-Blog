@@ -1,0 +1,91 @@
+# ==========================================================
+#  博客系统 - 生产环境 Docker Compose
+#  适用于 PostgreSQL / Redis / Elasticsearch 均由 1Panel 管理（1panel-network）的场景
+#  仅容器化 Go 后端 + Next.js 前端，通过共享 db_network 访问基础服务容器
+#
+#  用法: docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+# ==========================================================
+
+services:
+  # -------- Go 后端 --------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: blog_backend
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      TZ: Asia/Shanghai
+      GIN_MODE: release
+      PORT: 8080
+      # 数据库主机，通过 .env.production 中的 POSTGRES_HOST 指定
+      DB_HOST: ${POSTGRES_HOST:-host.docker.internal}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB}
+      REDIS_ADDR: ${REDIS_HOST}:${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      ES_URL: http://${ES_HOST}:${ES_PORT:-9200}
+      ES_USER: ${ES_USER:-}
+      ES_PASSWORD: ${ES_PASSWORD:-}
+      JWT_SECRET: ${JWT_SECRET}
+      FRONTEND_URL: ${SITE_DOMAIN}
+      CORS_ALLOW_ORIGINS: ${SITE_DOMAIN}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_FROM: ${SMTP_FROM}
+      UPLOAD_MAX_FILE_SIZE_MB: ${UPLOAD_MAX_FILE_SIZE_MB:-50}
+      API_RATE_LIMIT_PER_MIN: ${API_RATE_LIMIT_PER_MIN:-100}
+      AUTH_RATE_LIMIT_PER_MIN: ${AUTH_RATE_LIMIT_PER_MIN:-5}
+      LOGIN_MAX_ATTEMPTS: ${LOGIN_MAX_ATTEMPTS:-5}
+      LOGIN_LOCKOUT_MINUTES: ${LOGIN_LOCKOUT_MINUTES:-15}
+      WATERMARK_ENABLED: ${WATERMARK_ENABLED:-false}
+      WATERMARK_TEXT: ${WATERMARK_TEXT:-}
+      WATERMARK_POSITION: ${WATERMARK_POSITION:-bottom-right}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    ports:
+      - "127.0.0.1:8080:8080"
+    networks:
+      - blog_network
+      - db_network
+    volumes:
+      - ./uploads:/root/uploads
+    restart: unless-stopped
+
+  # -------- Next.js 前端 --------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${SITE_DOMAIN}/api/v1
+        NEXT_PUBLIC_SITE_URL: ${SITE_DOMAIN}
+        API_URL: http://backend:8080/api/v1
+    container_name: blog_frontend
+    environment:
+      TZ: Asia/Shanghai
+      API_URL: http://backend:8080/api/v1
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${SITE_DOMAIN}/api/v1
+      NEXT_PUBLIC_SITE_URL: ${SITE_DOMAIN}
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - blog_network
+    restart: unless-stopped
+
+networks:
+  blog_network:
+    driver: bridge
+  db_network:
+    external: true
+    name: ${DB_NETWORK:-1panel-network}   # 替换为实际网络名，或在 .env.production 里设置 DB_NETWORK
