@@ -2,6 +2,8 @@
 
 基于 **Go (Gin) + Next.js** 的全栈博客系统，支持 Markdown 写作、评论、全文搜索、OAuth 登录、文件上传等功能。
 
+演示站点：[https://blog.railx.cn/](https://blog.railx.cn/)
+（请勿滥用，产生的一切后果与作者无关）
 ## 技术栈
 
 | 层级 | 技术 |
